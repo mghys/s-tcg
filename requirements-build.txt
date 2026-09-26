@@ -1,0 +1,3 @@
+# Build-only dependencies. The shipped executable does not require Python.
+pyinstaller==6.22.3
+pyinstaller-hooks-contrib==2026.7

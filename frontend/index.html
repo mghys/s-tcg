@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#161a2b">
+  <title>WS 斩杀概率计算器</title>
+  <style>
+    :root { color-scheme: dark; --bg:#101321; --panel:#191e30; --line:#30384f; --text:#f5f6fa; --muted:#a7b0c4; --accent:#ffca71; --red:#ff8088; --green:#7cddb0; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; background:radial-gradient(ellipse at top,#262d47 0,var(--bg) 56%); color:var(--text); font:16px/1.55 system-ui,"Segoe UI",sans-serif; }
+    main { width:min(100% - 28px,920px); margin:0 auto; padding:42px 0 60px; }
+    header { margin-bottom:24px; }
+    .eyebrow { color:var(--accent); font-size:.8rem; font-weight:700; letter-spacing:.14em; text-transform:uppercase; }
+    h1 { margin:.35rem 0; font-size:clamp(1.8rem,5vw,2.7rem); line-height:1.15; }
+    header p,.note { color:var(--muted); }
+    form,.result,.assumptions { background:rgba(25,30,48,.94); border:1px solid var(--line); border-radius:18px; padding:22px; box-shadow:0 18px 55px #0003; }
+    .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+    label { display:block; color:#dce1ec; font-weight:650; font-size:.93rem; }
+    input { width:100%; margin-top:7px; padding:12px 13px; color:var(--text); background:#101525; border:1px solid #3a435e; border-radius:10px; font:inherit; outline:none; }
+    input:focus { border-color:var(--accent); box-shadow:0 0 0 3px #ffca7122; }
+    .wide { grid-column:1/-1; }
+    .note { margin:8px 0 0; font-size:.86rem; }
+    button { margin-top:20px; width:100%; padding:13px 18px; color:#1c1c24; background:var(--accent); border:0; border-radius:11px; font:inherit; font-weight:700; cursor:pointer; }
+    button:disabled { opacity:.6; cursor:wait; }
+    .error { margin-top:14px; color:#ffd0d2; background:#51283080; border:1px solid #84404a; padding:12px 14px; border-radius:10px; }
+    .result { margin-top:20px; }
+    .hero { text-align:center; padding:12px 0 20px; }
+    .hero small { color:var(--muted); display:block; }
+    .percent { display:block; font-size:clamp(2.4rem,8vw,4rem); line-height:1.2; font-weight:800; color:var(--red); font-variant-numeric:tabular-nums; }
+    .subgrid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+    .stat { padding:12px; border:1px solid var(--line); border-radius:12px; text-align:center; }
+    .stat span { display:block; color:var(--muted); font-size:.82rem; }
+    .stat strong { display:block; margin-top:5px; font-size:1.12rem; font-variant-numeric:tabular-nums; }
+    .safe { color:var(--green); }
+    h2 { font-size:1.15rem; margin:22px 0 8px; }
+    ul { margin:0; padding-left:1.25rem; color:var(--muted); }
+    .meta { margin-top:14px; color:var(--muted); font-size:.78rem; }
+    .sequence-tools { display:flex; gap:9px; margin-top:9px; flex-wrap:wrap; }
+    .sequence-tools input { width:105px; margin:0; }
+    .sequence-tools button,.op-action { width:auto; margin:0; padding:8px 11px; color:var(--text); background:#303953; border:1px solid #46516d; border-radius:9px; font-size:.86rem; }
+    .operation-list { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+    .operation-chip { display:flex; align-items:center; gap:8px; padding:7px 8px 7px 12px; border-radius:10px; background:#242c42; border:1px solid #424d69; }
+    .operation-chip.damage { border-color:#53638b; }
+    .operation-chip.mocha { border-color:#91713b; background:#3c3322; }
+    .op-action { padding:4px 7px; font-size:.78rem; }
+    .operation-builder { margin-top:8px; }
+    [hidden] { display:none !important; }
+    @media(max-width:600px) { main{padding-top:28px}.grid{grid-template-columns:1fr;gap:13px}.wide{grid-column:auto}form,.result,.assumptions{padding:17px}.subgrid{grid-template-columns:1fr} }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="eyebrow">Weiß Schwarz · Exact calculator</div>
+    <h1>斩杀概率计算器</h1>
+    <p>输入对手当前区域状态，并按顺序构造伤害与卡组破坏操作，精确计算对方败北概率。</p>
+  </header>
+  <form id="calc-form">
+    <div class="grid">
+      <label>牌库卡牌数<input name="deck_count" type="number" min="0" max="50" value="25" required></label>
+      <label>其中高潮卡数<input name="deck_climax" type="number" min="0" max="8" value="4" required></label>
+      <label>弃牌区卡牌数<input name="waiting_count" type="number" min="0" max="50" value="15" required></label>
+      <label>其中高潮卡数<input name="waiting_climax" type="number" min="0" max="8" value="2" required></label>
+      <label>等级-时计<input name="level_clock" type="text" inputmode="numeric" value="1-4" pattern="[0-9]+-[0-9]+" placeholder="1-4" required></label>
+      <label>时计区高潮卡数<input name="clock_climax" type="number" min="0" max="6" value="0" required></label>
+      <label class="wide">操作序列<input id="operation-text" name="operation_text" type="text" value="2-2-3-4" placeholder="摩卡2-3-摩卡2-3-摩卡3-3" required></label>
+    </div>
+    <div class="operation-builder wide">
+      <div class="sequence-tools">
+        <input id="operation-value" type="number" min="1" max="50" value="2" aria-label="操作数值">
+        <input id="operation-secondary" type="number" min="1" max="50" value="2" aria-label="掏底伤害数值">
+        <button type="button" id="add-damage">＋ 普通伤害</button>
+        <button type="button" id="add-mocha">＋ 摩卡</button>
+        <button type="button" id="add-bottom-conditional">＋ 条件掏底</button>
+        <button type="button" id="add-bottom-per-climax">＋ 计次掏底</button>
+        <button type="button" id="clear-operations">清空构造</button>
+      </div>
+      <div id="operation-list" class="operation-list" aria-label="操作序列构造器"></div>
+    </div>
+    <p class="note">数字表示普通伤害；摩卡 x 查看牌顶最多 x 张。掏底条件 x-y 表示从牌底送弃 x 张，若其中有高潮则造成 y 点伤害；掏底计次 x-z 表示送弃 x 张，每张高潮造成一次 z 点伤害，触发次数不超过掏底张数（最多 5 次）。掏底 x≤5、条件伤害 y≤4、计次伤害 z≤50。掏底耗尽牌库时正常刷新；刷新点放入时计就是规则要求的 1 点伤害，不会重复罚伤，然后继续掏底。</p>
+    <button id="submit" type="submit">计算败北概率</button>
+    <div id="error" class="error" role="alert" hidden></div>
+  </form>
+  <section id="result" class="result" aria-live="polite" hidden>
+    <div class="hero"><small>整组伤害结算期间对方败北概率</small><strong id="defeat" class="percent">—</strong><small>包含等级达到 4 或无法刷新败北</small></div>
+    <div class="subgrid">
+      <div class="stat"><span>升至 4 级败北</span><strong id="level-defeat">—</strong></div>
+      <div class="stat"><span>无法刷新败北</span><strong id="refresh-defeat">—</strong></div>
+      <div class="stat"><span>全部伤害后存活</span><strong id="survival" class="safe">—</strong></div>
+    </div>
+    <h2>计算假设</h2><ul id="assumptions"></ul>
+    <div id="versions" class="meta"></div>
+  </section>
+</main>
+<script>
+  const form = document.querySelector('#calc-form');
+  const submit = document.querySelector('#submit');
+  const result = document.querySelector('#result');
+  const error = document.querySelector('#error');
+  const operationText = document.querySelector('#operation-text');
+  const operationList = document.querySelector('#operation-list');
+  let operations = [{type:'damage', value:2},{type:'damage', value:2},{type:'damage', value:3},{type:'damage', value:4}];
+  const fraction = (v) => `${v.percent}（${v.numerator}/${v.denominator}）`;
+  const serializeOperations = () => operations.map((op) => {
+    if (op.type === 'mocha') return `摩卡${op.value}`;
+    if (op.type === 'bottom_conditional') return `掏底条件${op.value}-${op.secondary}`;
+    if (op.type === 'bottom_per_climax') return `掏底计次${op.value}-${op.secondary}`;
+    return String(op.value);
+  }).join('-');
+  const syncOperationText = () => { operationText.value = serializeOperations(); };
+  const renderOperations = () => {
+    operationList.replaceChildren(...operations.map((op, index) => {
+      const chip = document.createElement('div');
+      chip.className = `operation-chip ${op.type === 'mocha' || op.type.startsWith('bottom_') ? 'mocha' : 'damage'}`;
+      const label = document.createElement('strong');
+      label.textContent = op.type === 'mocha' ? `摩卡 ${op.value}` : op.type === 'bottom_conditional' ? `掏底条件 ${op.value}-${op.secondary}` : op.type === 'bottom_per_climax' ? `掏底计次 ${op.value}-${op.secondary}` : `伤害 ${op.value}`;
+      chip.append(label);
+      const up = document.createElement('button'); up.type='button'; up.className='op-action'; up.textContent='↑'; up.setAttribute('aria-label','上移'); up.disabled=index===0;
+      up.addEventListener('click',()=>{ [operations[index-1],operations[index]]=[operations[index],operations[index-1]]; renderOperations(); });
+      const down = document.createElement('button'); down.type='button'; down.className='op-action'; down.textContent='↓'; down.setAttribute('aria-label','下移'); down.disabled=index===operations.length-1;
+      down.addEventListener('click',()=>{ [operations[index+1],operations[index]]=[operations[index],operations[index+1]]; renderOperations(); });
+      const remove = document.createElement('button'); remove.type='button'; remove.className='op-action'; remove.textContent='×'; remove.setAttribute('aria-label','删除');
+      remove.addEventListener('click',()=>{ operations.splice(index,1); renderOperations(); });
+      chip.append(up,down,remove);
+      return chip;
+    }));
+    syncOperationText();
+  };
+  const operationValue = document.querySelector('#operation-value');
+  const operationSecondary = document.querySelector('#operation-secondary');
+  document.querySelector('#add-bottom-conditional').addEventListener('click',()=>{ operationSecondary.max='4'; });
+  document.querySelector('#add-bottom-per-climax').addEventListener('click',()=>{ operationSecondary.max='50'; });
+  document.querySelector('#add-damage').addEventListener('click',()=>{ const value=Number(operationValue.value); if(Number.isInteger(value)&&value>=1&&value<=50){operations.push({type:'damage',value});renderOperations();} });
+  document.querySelector('#add-mocha').addEventListener('click',()=>{ const value=Number(operationValue.value); if(Number.isInteger(value)&&value>=1&&value<=10){operations.push({type:'mocha',value});renderOperations();} });
+  document.querySelector('#add-bottom-conditional').addEventListener('click',()=>{ const value=Number(operationValue.value), secondary=Number(operationSecondary.value); if(Number.isInteger(value)&&value>=1&&value<=5&&Number.isInteger(secondary)&&secondary>=1&&secondary<=4){operations.push({type:'bottom_conditional',value,secondary});renderOperations();} });
+  document.querySelector('#add-bottom-per-climax').addEventListener('click',()=>{ const value=Number(operationValue.value), secondary=Number(operationSecondary.value); if(Number.isInteger(value)&&value>=1&&value<=5&&Number.isInteger(secondary)&&secondary>=1&&secondary<=50){operations.push({type:'bottom_per_climax',value,secondary});renderOperations();} });
+  document.querySelector('#clear-operations').addEventListener('click',()=>{ operations=[]; operationList.replaceChildren(); operationText.value=''; });
+  operationText.addEventListener('input',()=>{
+    const tokens = operationText.value.match(/掏底(?:条件|计次)\d+-\d+|摩卡\d+|\d+/g);
+    if (tokens && tokens.join('-') === operationText.value.replace(/[，,]/g, '-').replace(/\s/g, '')) {
+      operations = tokens.map((s) => {
+        if (s.startsWith('摩卡')) return {type:'mocha', value:Number(s.slice(2))};
+        if (s.startsWith('掏底条件')) { const [value,secondary]=s.slice(4).split('-').map(Number); return {type:'bottom_conditional',value,secondary}; }
+        if (s.startsWith('掏底计次')) { const [value,secondary]=s.slice(4).split('-').map(Number); return {type:'bottom_per_climax',value,secondary}; }
+        return {type:'damage',value:Number(s)};
+      });
+      renderOperations();
+    }
+  });
+  renderOperations();
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    error.hidden = true;
+    result.hidden = true;
+    submit.disabled = true;
+    submit.textContent = '精确计算中…';
+    const values = Object.fromEntries(new FormData(form));
+    const payload = {
+      deck_count: Number(values.deck_count),
+      deck_climax: Number(values.deck_climax),
+      waiting_count: Number(values.waiting_count),
+      waiting_climax: Number(values.waiting_climax),
+      level_clock: values.level_clock,
+      clock_climax: Number(values.clock_climax),
+      operation_sequence: values.operation_text,
+    };
+    try {
+      const response = await fetch('/api/ws/lethal-calculations', {
+        method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error?.message || '计算请求失败。');
+      document.querySelector('#defeat').textContent = fraction(data.defeat_probability);
+      document.querySelector('#level-defeat').textContent = fraction(data.level_defeat_probability);
+      document.querySelector('#refresh-defeat').textContent = fraction(data.refresh_defeat_probability);
+      document.querySelector('#survival').textContent = fraction(data.survival_probability);
+      const list = document.querySelector('#assumptions');
+      list.replaceChildren(...data.assumptions.map((text) => { const li=document.createElement('li'); li.textContent=text; return li; }));
+      document.querySelector('#versions').textContent = `规则：${data.rule_version} · 模型：${data.model_version} · 升级策略：${data.upgrade_strategy}`;
+      result.hidden = false;
+    } catch (err) {
+      error.textContent = err.message;
+      error.hidden = false;
+    } finally {
+      submit.disabled = false;
+      submit.textContent = '计算败北概率';
+    }
+  });
+</script>
+</body>
+</html>
